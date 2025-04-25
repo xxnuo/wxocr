@@ -1,0 +1,27 @@
+{
+    "version": 2,
+    "builds": [
+        {
+            "src": "api/ocr.py",
+            "use": "@vercel/python",
+            "config": {
+                "maxLambdaSize": "15mb",
+                "runtime": "python3.12"
+            }
+        }
+    ],
+    "routes": [
+        {
+            "src": "/api/ocr",
+            "dest": "api/ocr.py"
+        }
+    ],
+    "functions": {
+        "api/ocr.py": {
+            "includeFiles": [
+                "wx/*/*",
+                "wcocr.cpython-312-x86_64-linux-gnu.so"
+            ]
+        }
+    }
+}
