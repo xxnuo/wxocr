@@ -4,8 +4,6 @@ import uvicorn
 import wcocr
 from fastapi import FastAPI, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from xxhash import xxh64_hexdigest
 
@@ -76,25 +74,29 @@ async def super_speed_ocr_service(file: UploadFile):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/")
-async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
-
 if __name__ == "__main__":
     # 创建静态文件夹
-    static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
-    if not os.path.exists(static_dir):
-        os.makedirs(static_dir)
+    if os.environ.get("UI") == "1":
+        from fastapi.staticfiles import StaticFiles
+        from fastapi.templating import Jinja2Templates
 
-    # 挂载静态文件
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+        static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+        if not os.path.exists(static_dir):
+            os.makedirs(static_dir)
 
-    # 设置模板
-    templates_dir = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "templates"
-    )
-    if not os.path.exists(templates_dir):
-        os.makedirs(templates_dir)
-    templates = Jinja2Templates(directory=templates_dir)
+        # 挂载静态文件
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+        # 设置模板
+        templates_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "templates"
+        )
+        if not os.path.exists(templates_dir):
+            os.makedirs(templates_dir)
+        templates = Jinja2Templates(directory=templates_dir)
+
+        @app.get("/")
+        async def index(request: Request):
+            return templates.TemplateResponse("index.html", {"request": request})
 
     uvicorn.run(app, host="0.0.0.0", port=5000)
