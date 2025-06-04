@@ -1,10 +1,9 @@
 import base64
 import os
-from typing import Optional
 
 import uvicorn
 import wcocr
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -29,67 +28,51 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 创建静态文件夹
-static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
-if not os.path.exists(static_dir):
-    os.makedirs(static_dir)
 
-# 挂载静态文件
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
-# 设置模板
-templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
-if not os.path.exists(templates_dir):
-    os.makedirs(templates_dir)
-templates = Jinja2Templates(directory=templates_dir)
+class OCRResult(BaseModel):
+    text: str
+    confidence: float
+    bbox: list[float]
 
 
-class ImageRequest(BaseModel):
-    image: str
+class OCRResponse(BaseModel):
+    results: list[OCRResult]
 
 
-def extract_image_type(base64_data):
-    # Check if the base64 data has the expected prefix
-    if base64_data.startswith("data:image/"):
-        # Extract the image type from the prefix
-        prefix_end = base64_data.find(";base64,")
-        if prefix_end != -1:
-            return (
-                base64_data[len("data:image/") : prefix_end],
-                base64_data.split(";base64,")[-1],
-            )
-    return "png", base64_data
+@app.post("/ocr", response_model=OCRResponse)
+async def ocr2(file: UploadFile):
+    if not file or file.size == 0:
+        raise HTTPException(status_code=400, detail="No file provided")
 
-
-@app.post("/ocr")
-async def ocr(image_request: ImageRequest):
     try:
-        # Get base64 image from request
-        image_data = image_request.image
-        if not image_data:
-            raise HTTPException(status_code=400, detail="No image data provided")
+        # 保存上传的文件到临时目录
+        file_data = await file.read()
+        file_path = os.path.join(mem_fs_dir, xxh64_hexdigest(file_data))
+        with open(file_path, "wb") as f:
+            f.write(file_data)
 
-        # Extract image type from base64 data
-        image_type, base64_data = extract_image_type(image_data)
-        if not image_type:
-            raise HTTPException(status_code=400, detail="Invalid base64 image data")
-
-        # Generate unique filename and save image
-        filename = os.path.join(mem_fs_dir, f"{xxh64_hexdigest(base64_data)}.{image_type}")
         try:
-            image_bytes = base64.b64decode(base64_data)
-            with open(filename, "wb") as f:
-                f.write(image_bytes)
+            ocr_result = wcocr.ocr(file_path)
+            errcode = ocr_result.get("errcode", -1)
+            if errcode != 0:
+                raise HTTPException(status_code=500, detail=errcode)
 
-            # Process image with OCR
-            result = wcocr.ocr(filename)
-            return {"result": result}
+            # 处理OCR结果
+            items = []
+            for item in ocr_result.get("ocr_response", []):
+                items.append(
+                    OCRResult(
+                        text=item["text"],
+                        confidence=item["rate"],
+                        bbox=[item["left"], item["top"], item["right"], item["bottom"]],
+                    )
+                )
 
+            return OCRResponse(results=items)
         finally:
-            pass
-        #     # Clean up temp file
-        #     if os.path.exists(filename):
-        #         os.remove(filename)
+            # 清理临时文件
+            if os.path.exists(file_path):
+                os.remove(file_path)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -117,8 +100,20 @@ async def method_not_allowed_exception_handler(request: Request, exc):
 
 
 if __name__ == "__main__":
-    # 确保templates目录存在
+    # 创建静态文件夹
+    static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+    if not os.path.exists(static_dir):
+        os.makedirs(static_dir)
+
+    # 挂载静态文件
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+    # 设置模板
+    templates_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "templates"
+    )
     if not os.path.exists(templates_dir):
         os.makedirs(templates_dir)
+    templates = Jinja2Templates(directory=templates_dir)
 
     uvicorn.run(app, host="0.0.0.0", port=5000)
