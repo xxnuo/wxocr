@@ -158,7 +158,6 @@
             <div class="input-group">
                 <input type="file" id="fileInput" accept="image/*">
                 <p>或拖拽图片到此区域</p>
-                <input type="text" id="urlInput" placeholder="输入图片URL地址">
             </div>
             <button onclick="processImage()">开始识别</button>
         </div>
@@ -194,9 +193,8 @@
 
         <h3>请求示例</h3>
         <pre>
-{
-  "image": "BASE64_ENCODED_IMAGE_DATA"
-}</pre>
+文件上传方式：Content-Type: multipart/form-data
+参数名：file</pre>
 
         <h3>返回示例</h3>
         <pre id="responseSample"></pre>
@@ -250,29 +248,24 @@
         // 开始处理图像
         async function processImage() {
             const file = document.getElementById('fileInput').files[0];
-            const url = document.getElementById('urlInput').value;
-            let base64Data = '';
 
             try {
                 showLoading();
                 clearError();
 
-                if (file) {
-                    base64Data = await fileToBase64(file);
-                } else if (url) {
-                    base64Data = await urlToBase64(url);
-                } else {
-                    showError('请选择图片或输入图片URL');
+                if (!file) {
+                    showError('请选择图片文件');
                     return;
                 }
+
+                // 创建FormData对象
+                const formData = new FormData();
+                formData.append('file', file);
 
                 // 发送请求
                 const response = await fetch(API_ENDPOINT, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ image: base64Data })
+                    body: formData
                 });
 
                 const data = await response.json();
@@ -286,35 +279,33 @@
 
         // 处理响应数据
         function handleResponse(data) {
-            // 处理新的响应结构
-            const resultData = data.result || data;
-
-            if (resultData.errcode !== 0) {
-                showError(`识别失败，错误码：${resultData.errcode}`);
-                return;
-            }
-
             // 显示结果表格
             const tbody = document.getElementById('resultBody');
             tbody.innerHTML = '';
-            resultData.ocr_response.forEach(item => {
+            
+            if (!data.results || data.results.length === 0) {
+                showError('未识别到文本');
+                return;
+            }
+
+            data.results.forEach(item => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${item.text}</td>
-                    <td>${(item.rate * 100).toFixed(2)}%</td>
-                    <td>(${item.left.toFixed(1)}, ${item.top.toFixed(1)}, 
-                        ${item.right.toFixed(1)}, ${item.bottom.toFixed(1)})</td>
+                    <td>${(item.confidence * 100).toFixed(2)}%</td>
+                    <td>(${item.bbox[0].toFixed(1)}, ${item.bbox[1].toFixed(1)}, 
+                        ${item.bbox[2].toFixed(1)}, ${item.bbox[3].toFixed(1)})</td>
                 `;
                 tbody.appendChild(row);
             });
             document.getElementById('resultTable').style.display = 'table';
 
             // 在图片上绘制识别区域
-            drawTextBoxes(resultData.ocr_response, resultData.width, resultData.height);
+            drawTextBoxes(data.results);
         }
 
         // 在图片上绘制文本框
-        function drawTextBoxes(ocrResults, originalWidth, originalHeight) {
+        function drawTextBoxes(results) {
             const imageContainer = document.getElementById('imageContainer');
             const preview = document.getElementById('preview');
 
@@ -330,21 +321,25 @@
             const offsetX = imgRect.left - containerRect.left;
             const offsetY = imgRect.top - containerRect.top;
 
+            // 计算原始图片尺寸
+            const originalWidth = preview.naturalWidth;
+            const originalHeight = preview.naturalHeight;
+
             // 计算缩放比例
             const scaleX = imgRect.width / originalWidth;
             const scaleY = imgRect.height / originalHeight;
 
             // 为每个识别结果创建文本框
-            ocrResults.forEach((item, index) => {
+            results.forEach((item, index) => {
                 // 创建文本框
                 const textBox = document.createElement('div');
                 textBox.className = 'text-box';
 
                 // 精确定位文本框，考虑图片在容器中的偏移
-                const left = item.left * scaleX + offsetX;
-                const top = item.top * scaleY + offsetY;
-                const width = (item.right - item.left) * scaleX;
-                const height = (item.bottom - item.top) * scaleY;
+                const left = item.bbox[0] * scaleX + offsetX;
+                const top = item.bbox[1] * scaleY + offsetY;
+                const width = (item.bbox[2] - item.bbox[0]) * scaleX;
+                const height = (item.bbox[3] - item.bbox[1]) * scaleY;
 
                 // 设置文本框位置和大小
                 textBox.style.left = `${left}px`;
@@ -358,7 +353,7 @@
                 tooltip.className = 'text-tooltip';
                 tooltip.innerHTML = `
                     <div>${item.text}</div>
-                    <div class="confidence">置信度: ${(item.rate * 100).toFixed(2)}%</div>
+                    <div class="confidence">置信度: ${(item.confidence * 100).toFixed(2)}%</div>
                 `;
 
                 // 添加鼠标事件
@@ -383,21 +378,6 @@
         }
 
         // 工具函数
-        function fileToBase64(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = error => reject(error);
-                reader.readAsDataURL(file);
-            });
-        }
-
-        async function urlToBase64(url) {
-            const response = await fetch(url);
-            const blob = await response.blob();
-            return fileToBase64(blob);
-        }
-
         function showLoading() {
             document.getElementById('loading').style.display = 'block';
         }
@@ -418,22 +398,13 @@
 
         // 初始化示例响应显示
         document.getElementById('responseSample').textContent = JSON.stringify({
-            "result": {
-                "errcode": 0,
-                "height": 258,
-                "imgpath": "temp/0cfbda36-a05d-4cba-9a72-cec6833d305d.png",
-                "ocr_response": [
-                    {
-                        "bottom": 41.64999771118164,
-                        "left": 33.6875,
-                        "rate": 0.9951504468917847,
-                        "right": 164.76248168945312,
-                        "text": "API接口说明",
-                        "top": 18.98750114440918
-                    }
-                ],
-                "width": 392
-            }
+            "results": [
+                {
+                    "text": "API接口说明",
+                    "confidence": 0.9951504468917847,
+                    "bbox": [33.6875, 18.98750114440918, 164.76248168945312, 41.64999771118164]
+                }
+            ]
         }, null, 2);
     </script>
 </body>

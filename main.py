@@ -1,11 +1,9 @@
-import base64
 import os
 
 import uvicorn
 import wcocr
 from fastapi import FastAPI, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -40,7 +38,7 @@ class OCRResponse(BaseModel):
 
 
 @app.post("/ocr", response_model=OCRResponse)
-async def ocr2(file: UploadFile):
+async def super_speed_ocr_service(file: UploadFile):
     if not file or file.size == 0:
         raise HTTPException(status_code=400, detail="No file provided")
 
@@ -81,23 +79,6 @@ async def ocr2(file: UploadFile):
 @app.get("/")
 async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
-
-
-@app.exception_handler(404)
-async def not_found_exception_handler(request: Request, exc):
-    return JSONResponse(
-        status_code=404,
-        content={"error": "Resource not found"},
-    )
-
-
-@app.exception_handler(405)
-async def method_not_allowed_exception_handler(request: Request, exc):
-    return JSONResponse(
-        status_code=405,
-        content={"error": "Method not allowed"},
-    )
-
 
 if __name__ == "__main__":
     # 创建静态文件夹
