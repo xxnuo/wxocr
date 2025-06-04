@@ -76,7 +76,7 @@ async def super_speed_ocr_service(file: UploadFile):
 
 if __name__ == "__main__":
     # 创建静态文件夹
-    if os.environ.get("UI") == "1":
+    if os.environ.get("UI","1") == "1":
         from fastapi.staticfiles import StaticFiles
         from fastapi.templating import Jinja2Templates
 
