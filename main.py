@@ -5,7 +5,9 @@ import base64
 from flask import Flask, request, jsonify, render_template, send_from_directory
 
 app = Flask(__name__)
-wcocr.init("./wx/opt/wechat/wxocr", "./wx/opt/wechat")
+
+arch = "aarch64"
+wcocr.init(f"./bin/{arch}/wxocr", f"./bin/{arch}")
 
 
 @app.route("/ocr", methods=["POST"])

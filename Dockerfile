@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip install flask
 
-COPY wcocr.cpython-312-x86_64-linux-gnu.so /app/wcocr.cpython-312-x86_64-linux-gnu.so
+COPY wcocr.so /app/wcocr.so
 
 COPY wx /app/wx
 
