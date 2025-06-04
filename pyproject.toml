@@ -3,7 +3,9 @@ name = "wxocr"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
-    "flask>=3.1.0",
+    "fastapi>=0.115.12",
+    "uvicorn[standard]>=0.34.3",
+    "xxhash>=3.5.0",
 ]

@@ -25,11 +25,11 @@ prepare: sync-to-gpu
 		export ALL_PROXY=$(ENV_PROXY) && \
 		export NO_PROXY=localhost,192.168.1.200,registry.lazycat.cloud && \
 		$(UV) venv && \
-		$(UV) sync
+		$(UV) sync"
 
 run: sync-to-gpu
 	ssh -t $(REMOTE) "cd $(REMOTE_PATH) && \
-		$(UV) run main.py
+		$(UV) run main.py"
 
 build: compile
 	ssh -t $(REMOTE) "cd $(REMOTE_PATH) && \
