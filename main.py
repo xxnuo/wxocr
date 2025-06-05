@@ -28,7 +28,7 @@ app.add_middleware(
 class OCRResult(BaseModel):
     text: str
     confidence: float
-    bbox: list[float]
+    bbox: list
 
 
 class OCRResponse(BaseModel):
